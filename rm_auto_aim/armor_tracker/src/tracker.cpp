@@ -44,9 +44,9 @@ void Tracker::init(const Armors::SharedPtr & armors_msg)
       tracked_armor = armor;
     }
   }
-  // 调用 initEKF 方法来初始化扩展卡尔曼滤波（EKF）的状态。
-  initEKF(tracked_armor);
-  RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "Init EKF!");
+  // 调用 initUKF 方法来初始化无迹卡尔曼滤波（UKF）的状态。
+  initUKF(tracked_armor);
+  RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "Init UKF!");
 
   tracked_id = tracked_armor.number;
   tracker_state = DETECTING;
@@ -57,18 +57,18 @@ void Tracker::init(const Armors::SharedPtr & armors_msg)
 void Tracker::update(const Armors::SharedPtr & armors_msg)
 {
   // KF predict
-  Eigen::VectorXd ekf_prediction = ekf.predict();
-  RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "EKF predict");
+  Eigen::VectorXd ukf_prediction = ukf.predict();
+  RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "UKF predict");
 
   bool matched = false;
   // Use KF prediction as default target state if no matched armor is found
-  target_state = ekf_prediction;
+  target_state = ukf_prediction;
 
   if (!armors_msg->armors.empty()) {
     // Find the closest armor with the same id
     Armor same_id_armor;
     int same_id_armors_count = 0;
-    auto predicted_position = getArmorPositionFromState(ekf_prediction);
+    auto predicted_position = getArmorPositionFromState(ukf_prediction);
     double min_position_diff = DBL_MAX;
     double yaw_diff = DBL_MAX;
     for (const auto & armor : armors_msg->armors) {
@@ -83,7 +83,7 @@ void Tracker::update(const Armors::SharedPtr & armors_msg)
         if (position_diff < min_position_diff) {
           // Find the closest armor
           min_position_diff = position_diff;
-          yaw_diff = abs(orientationToYaw(armor.pose.orientation) - ekf_prediction(6));
+          yaw_diff = abs(orientationToYaw(armor.pose.orientation) - ukf_prediction(6));
           tracked_armor = armor;
         }
       }
@@ -96,10 +96,10 @@ void Tracker::update(const Armors::SharedPtr & armors_msg)
       // Matched armor found
       matched = true;
       auto p = tracked_armor.pose.position;
-      // Update EKF
+      // Update UKF
       double measured_yaw = orientationToYaw(tracked_armor.pose.orientation);
       measurement = Eigen::Vector4d(p.x, p.y, p.z, measured_yaw);
-      target_state = ekf.update(measurement);
+      target_state = ukf.update(measurement);
       /*
       位置信息：
       target_state(0): X 坐标位置
@@ -114,7 +114,7 @@ void Tracker::update(const Armors::SharedPtr & armors_msg)
       半径信息：
       target_state(8): 目标的半径
     */
-      RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "EKF update");
+      RCLCPP_DEBUG(rclcpp::get_logger("armor_tracker"), "UKF update");
     } else if (same_id_armors_count == 1 && yaw_diff > max_match_yaw_diff_) {
       // Matched armor not found, but there is only one armor with the same id
       // and yaw has jumped, take this case as the target is spinning and armor jumped
@@ -131,10 +131,10 @@ void Tracker::update(const Armors::SharedPtr & armors_msg)
   // Prevent radius from spreading
   if (target_state(8) < 0.12) {
     target_state(8) = 0.12;
-    ekf.setState(target_state);
+    ukf.setState(target_state);
   } else if (target_state(8) > 0.4) {
     target_state(8) = 0.4;
-    ekf.setState(target_state);
+    ukf.setState(target_state);
   }
 
   // Tracking state machine
@@ -168,7 +168,7 @@ void Tracker::update(const Armors::SharedPtr & armors_msg)
   }
 }
 
-void Tracker::initEKF(const Armor & a)
+void Tracker::initUKF(const Armor & a)
 {
   double xa = a.pose.position.x;
   double ya = a.pose.position.y;
@@ -184,7 +184,7 @@ void Tracker::initEKF(const Armor & a)
   dz = 0, another_r = r;
   target_state << xc, 0, yc, 0, za, 0, yaw, 0, r;
 
-  ekf.setState(target_state);
+  ukf.setState(target_state);
 }
 
 // 装甲板面数
@@ -214,7 +214,7 @@ void Tracker::handleArmorJump(const Armor & current_armor)
   RCLCPP_WARN(rclcpp::get_logger("armor_tracker"), "Armor jump!");
 
   // If position difference is larger than max_match_distance_,
-  // take this case as the ekf diverged, reset the state
+  // take this case as the ukf diverged, reset the state
   auto p = current_armor.pose.position;
   Eigen::Vector3d current_p(p.x, p.y, p.z);
   Eigen::Vector3d infer_p = getArmorPositionFromState(target_state);
@@ -229,7 +229,7 @@ void Tracker::handleArmorJump(const Armor & current_armor)
     RCLCPP_ERROR(rclcpp::get_logger("armor_tracker"), "Reset State!");
   }
 
-  ekf.setState(target_state);
+  ukf.setState(target_state);
 }
 
 // 用于将给定的四元数表示的姿态（朝向）转换为偏航角（yaw）

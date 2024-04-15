@@ -15,7 +15,7 @@
 #include <memory>
 #include <string>
 
-#include "armor_tracker/unscente_kalman_filter.hpp"
+#include "armor_tracker/unscented_kalman_filter.hpp"
 #include "auto_aim_interfaces/msg/armors.hpp"
 #include "auto_aim_interfaces/msg/target.hpp"
 
@@ -63,7 +63,7 @@ public:
   double dz, another_r;
 
 private:
-  void initEKF(const Armor & a);
+  void initUKF(const Armor & a);
 
   void updateArmorsNum(const Armor & a);
 

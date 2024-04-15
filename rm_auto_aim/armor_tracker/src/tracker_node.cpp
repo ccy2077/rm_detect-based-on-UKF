@@ -22,7 +22,7 @@ ArmorTrackerNode::ArmorTrackerNode(const rclcpp::NodeOptions & options)
   tracker_->tracking_thres = this->declare_parameter("tracker.tracking_thres", 5);
   lost_time_thres_ = this->declare_parameter("tracker.lost_time_thres", 0.3);
 
-  // EKF
+  // UKF
   // xa = x_armor, xc = x_robot_center
   // state: xc, v_xc, yc, v_yc, za, v_za, yaw, v_yaw, r
   // measurement: xa, ya, za, yaw
@@ -81,7 +81,7 @@ ArmorTrackerNode::ArmorTrackerNode(const rclcpp::NodeOptions & options)
   // P - error estimate covariance matrix
   Eigen::DiagonalMatrix<double, 9> p0;
   p0.setIdentity();
-  tracker_->ekf = ExtendedKalmanFilter{f, h, u_q, u_r, p0};
+  tracker_->ukf = UnscentedKalmanFilter{f, h, u_q, u_r, p0};
 
   // Reset tracker service
   using std::placeholders::_1;

@@ -12,6 +12,8 @@ namespace rm_auto_aim
 class UnscentedKalmanFilter
 {
   public:
+    UnscentedKalmanFilter() = default;
+
     using VecVecFunc = std::function<Eigen::VectorXd(const Eigen::VectorXd &)>;
     using VecMatFunc = std::function<Eigen::MatrixXd(const Eigen::VectorXd &)>;
     using VoidMatFunc = std::function<Eigen::MatrixXd()>;
@@ -46,6 +48,7 @@ class UnscentedKalmanFilter
 
   // System dimensions
   int n;
+  int p;
 
   // N-size identity
   Eigen::MatrixXd I;
@@ -54,6 +57,8 @@ class UnscentedKalmanFilter
   Eigen::VectorXd x_pri;
   // Posteriori state
   Eigen::VectorXd x_post;
+  //预测观测均值
+  Eigen::VectorXd z_pri;
 
   //权重向量
   Eigen::VectorXd weights;
